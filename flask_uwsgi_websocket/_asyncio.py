@@ -31,21 +31,16 @@ class AsyncioWebSocketClient(WebSocketClient):
             self._tickhdr = self._loop.call_later(self.timeout, self._recv_ready)
         self.concurrent.switch()
 
-    @asyncio.coroutine
-    def _send_ready(self, f):
-        msg = yield from self.send_queue.get()
+    async def _send_ready(self, f):
+        msg = await self.send_queue.get()
         f.set_result(msg)
         f.greenlet.switch()
 
-    @asyncio.coroutine
-    def receive(self):
-        msg = yield from self.a_recv()
-        return msg
+    async def receive(self):
+        return await self.a_recv()
 
-    @asyncio.coroutine
-    def recv(self):
-        msg = yield from self.a_recv()
-        return msg
+    async def recv(self):
+        return await self.a_recv()
 
     def recv_nb(self):
         if self.connected:
@@ -57,9 +52,8 @@ class AsyncioWebSocketClient(WebSocketClient):
             msg = None
         return msg
 
-    @asyncio.coroutine
-    def send(self, msg):
-        yield from self.a_send(msg)
+    async def send(self, msg):
+        await self.a_send(msg)
 
     def send_nb(self, msg):
         if self.connected:
@@ -67,17 +61,15 @@ class AsyncioWebSocketClient(WebSocketClient):
         else:
             raise ConnectionError
 
-    @asyncio.coroutine
-    def a_recv(self):
+    async def a_recv(self):
         if self.connected:
-            msg = yield from self.recv_queue.get()
+            msg = await self.recv_queue.get()
         else:
             msg = None
         return msg
 
-    @asyncio.coroutine
-    def a_send(self, msg):
-        yield from self.send_queue.put(msg)
+    async def a_send(self, msg):
+        await self.send_queue.put(msg)
 
     def close(self):
         self.connected = False
@@ -122,9 +114,11 @@ class AsyncioWebSocketMiddleware(WebSocketMiddleware):
         client = self.client(environ, uwsgi.connection_fd(), self.websocket.timeout, greenlet.getcurrent())
 
         assert asyncio.iscoroutinefunction(handler)
-        asyncio.Task(asyncio.coroutine(handler)(client, **args))
+        async def _run():
+            await handler(client, **args)
+        asyncio.create_task(_run())
         f = GreenFuture()
-        asyncio.Task(client._send_ready(f))
+        asyncio.create_task(client._send_ready(f))
         try:
             while True:
                 f.greenlet.parent.switch()
@@ -132,12 +126,12 @@ class AsyncioWebSocketMiddleware(WebSocketMiddleware):
                     msg = f.result()
                     uwsgi.websocket_send(msg)
                     f = GreenFuture()
-                    asyncio.Task(client._send_ready(f))
+                    asyncio.create_task(client._send_ready(f))
                 if client.has_msg:
                     client.has_msg = False
                     msg = uwsgi.websocket_recv_nb()
                     while msg:
-                        asyncio.Task(client.recv_queue.put(msg))
+                        asyncio.create_task(client.recv_queue.put(msg))
                         msg = uwsgi.websocket_recv_nb()
         except OSError:
             client.close()
