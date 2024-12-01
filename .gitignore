@@ -3,3 +3,13 @@
 *.pyo
 dist/
 build/
+
+#mac osx
+.DS_Store
+
+#windows
+Thumbs.db   
+
+#venv
+env
+venv
