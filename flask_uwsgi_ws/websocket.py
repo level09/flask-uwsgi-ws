@@ -5,7 +5,6 @@ from ._uwsgi import uwsgi, run_uwsgi
 from werkzeug.routing import Map, Rule
 from werkzeug.exceptions import HTTPException
 
-# Replace setupmethod with a simple decorator
 def _setupmethod(f):
     """Wrapper to mark a function as a setup method."""
     f._is_setup_method = True
@@ -152,7 +151,6 @@ class WebSocket(object):
                                      'existing endpoint function: %s' % endpoint)
             self.view_functions[endpoint] = view_func
 
-    # Replace @setupmethod with @_setupmethod
     @_setupmethod
     def register_blueprint(self, blueprint, **options):
         '''
